@@ -1,5 +1,6 @@
 use rand::Rng;
 use std::cmp::Ordering;
+use plotters::prelude::*;
 
 struct Bandit {
     rates: Vec<i32>,
@@ -63,16 +64,16 @@ impl Agent {
     }
 }
 
-fn main() {
-    let steps = 1000;
-    let epsilon = 0.1f32;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let steps = 1_000;
+    let epsilon = 0.1;
 
     let bandit = Bandit::new(20);
     let mut agent = Agent::new(epsilon, Some(20));
 
     let mut total_reward = 0;
-    let mut total_rewards: Vec<u32> = vec![];
-    let mut rates: Vec<f32> = vec![];
+    let mut total_rewards: Vec<f64> = vec![];
+    let mut rates: Vec<f64> = vec![];
 
     for step in 0..steps {
         // 1. choose an action
@@ -85,9 +86,58 @@ fn main() {
         agent.update(action, reward);
         total_reward += reward;
 
-        total_rewards.push(total_reward);
-        rates.push(total_reward as f32 / (step + 1) as f32);
+        total_rewards.push(total_reward as f64);
+        rates.push(total_reward as f64 / (step as f64 + 1f64));
     }
 
-    println!("{:?}", total_rewards);
+    // println!("Total rewards: {:?}", total_reward);
+    // println!("Total reward: {:?}", total_rewards);
+
+    let (_, rewards_max) = total_rewards
+        .iter()
+        .fold((0.0 / 0.0, 0.0 / 0.0), |(m, n), v | (v.min(m), v.max(n)));
+    let (_, rates_max) = rates
+        .iter()
+        .fold((0.0 / 0.0, 0.0 / 0.0), |(m, n), v| (v.min(m), v.max(n)));
+    
+    // prepare for drawing a graphs
+    let mut points_total_rewards = vec![];
+    let mut points_rates = vec![];
+    for (i, val) in total_rewards.iter().enumerate() {
+        points_total_rewards.push(((i + 1) as f64, *val));
+    }
+    for (i, val) in rates.iter().enumerate() {
+        points_rates.push(((i + 1) as f64, *val));
+    }
+
+    // draw graph
+    let root =
+        BitMapBackend::new("output/bandit/total_reward.png", (1280, 960)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption("Bandit Total Reward", ("sans-serif", 20).into_font())
+        .margin(10)
+        .x_label_area_size(50)
+        .y_label_area_size(50)
+        .build_cartesian_2d(0f64..1_000f64, 0f64..rewards_max)?;
+    chart.configure_mesh().draw()?;
+    chart.draw_series(LineSeries::new(points_total_rewards, &RED))?;
+
+    // draw a graph2
+    let root =
+        BitMapBackend::new("output/bandit/rates.png", (1280, 960)).into_drawing_area();
+    root.fill(&WHITE)?;
+    let root = root.margin(10, 10, 10, 10);
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption("Bandit Rates", ("sans-serif", 20).into_font())
+        .margin(10)
+        .x_label_area_size(50)
+        .y_label_area_size(50)
+        .build_cartesian_2d(0f64..1_000f64, 0f64..rates_max)?;
+    chart.configure_mesh().draw()?;
+    chart.draw_series(LineSeries::new(points_rates, &RED))?;
+
+    Ok(())
 }
